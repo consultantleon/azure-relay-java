@@ -26,16 +26,16 @@ public class HybridConnectionListener implements RelayTraceSource, AutoCloseable
 	private final InputQueue<HybridConnectionChannel> connectionInputQueue;
 	private final ControlConnection controlConnection;
 	private final Object thisLock = new Object();
-	private boolean openCalled;
+    private volatile boolean openCalled;
 	private volatile boolean closeCalled;
-	private Duration operationTimeout;
+    private final Duration operationTimeout;
 	private int maxWebSocketBufferSize;
 	private String cachedString;
 	private Function<RelayedHttpListenerContext, Boolean> acceptHandler;
 	private Consumer<RelayedHttpListenerContext> requestHandler;
-	private URI address;
-	private TrackingContext trackingContext;
-	private TokenProvider tokenProvider;
+    private final URI address;
+    private final TrackingContext trackingContext;
+    private final TokenProvider tokenProvider;
 	private Consumer<Throwable> connectingHandler;
 	private Consumer<Throwable> offlineHandler;
 	private Runnable onlineHandler;
@@ -510,10 +510,10 @@ public class HybridConnectionListener implements RelayTraceSource, AutoCloseable
 		private final TokenRenewer tokenRenewer;
 		private final AsyncLock sendAsyncLock;
 		private final Object thisLock = new Object();
-		private CompletableFuture<ClientWebSocket> connectAsyncTask;
-		private int connectDelayIndex;
-		private Throwable lastError;
-		private boolean closeCalled;
+        private volatile CompletableFuture<ClientWebSocket> connectAsyncTask;
+        private volatile int connectDelayIndex;
+        private volatile Throwable lastError;
+        private volatile boolean closeCalled;
 
 		ControlConnection(HybridConnectionListener listener) {
 			this.listener = listener;
@@ -562,6 +562,7 @@ public class HybridConnectionListener implements RelayTraceSource, AutoCloseable
 						CloseReason closeReason = new CloseReason(CloseCodes.UNEXPECTED_CONDITION,
 								"closing web socket connection because something went wrong trying to connect.");
 						this.closeOrAbortWebSocketAsync(connectTask, closeReason);
+						tokenRenewer.close();
 						throw new CompletionException(err);
 					}
 				});
@@ -698,8 +699,14 @@ public class HybridConnectionListener implements RelayTraceSource, AutoCloseable
 				return delayTask.thenCompose(($void) -> {
 					return webSocket.connectAsync(websocketUri, timeout, config)
 						.thenApply(($void2) -> {
-							this.onOnline();
-							return webSocket;
+                                this.onOnline();
+                                return webSocket;
+                            })
+                            .exceptionally((exception) -> {
+                                webSocket.shutdown();
+                                throw (exception instanceof CompletionException)
+                                      ? (CompletionException) exception
+                                      : new CompletionException(exception);
 						});
 				});
 			}

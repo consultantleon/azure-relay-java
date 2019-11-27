@@ -18,12 +18,12 @@ class ClientWebSocket extends Endpoint implements RelayTraceSource {
 	private final AutoShutdownScheduledExecutor executor;
 	private final WebSocketContainer container = ContainerProvider.getWebSocketContainer();
 	private final TrackingContext trackingContext;
-	private Session session;
-	private int maxMessageBufferSize = RelayConstants.DEFAULT_CONNECTION_BUFFER_SIZE;
-	private CloseReason closeReason;
-	private InputQueue<MessageFragment> fragmentQueue;
-	private InputQueue<String> textQueue;
-	private CompletableFuture<Void> closeTask;
+    private volatile Session session;
+    private volatile int maxMessageBufferSize = RelayConstants.DEFAULT_CONNECTION_BUFFER_SIZE;
+    private volatile CloseReason closeReason;
+    private final InputQueue<MessageFragment> fragmentQueue;
+    private final InputQueue<String> textQueue;
+    private volatile CompletableFuture<Void> closeTask;
 	private String cachedString;
 
 	/**
@@ -323,20 +323,21 @@ class ClientWebSocket extends Endpoint implements RelayTraceSource {
 	
 	@OnClose
 	public void onClose(Session session, CloseReason reason) {
-		CompletableFuture.runAsync(() -> {
-			try {
-				((LifeCycle) this.container).stop();	
-			} catch (Exception e) {
-				RelayLogger.handledExceptionAsWarning(e, this);
-			}
-		}, executor);
-		
+        shutdown();
 		this.closeReason = reason;
 		RelayLogger.logEvent("clientWebSocketClosed", this, reason.getReasonPhrase());
 		this.textQueue.shutdown();
 		this.fragmentQueue.shutdown();
 		this.closeTask.complete(null);
 	}
+
+    public void shutdown() {
+        try {
+            ((LifeCycle) this.container).stop();
+        } catch (Exception e) {
+            RelayLogger.handledExceptionAsWarning(e, this);
+        }
+    }
 
 	@OnError
 	public void onError(Session session, Throwable cause) {

@@ -7,13 +7,13 @@ import java.util.UUID;
 public class TrackingContext {
 	private static final UUID UUID_ZERO = new UUID(0L, 0L); // equivalent of Guid.Empty in C#
 	private static final int UUID_STRING_LENGTH = UUID_ZERO.toString().length();
-	static final String TRACKING_ID_NAME = "TrackingId";
-	static final String ADDRESS_NAME = "Address";
-	static final String TIMESTAMP_NAME = "Timestamp";
+	private static final String TRACKING_ID_NAME = "TrackingId";
+	private static final String ADDRESS_NAME = "Address";
+	private static final String TIMESTAMP_NAME = "Timestamp";
 	private String cachedToString;
-	private UUID activityId;
-	private String trackingId;
-	private String address;
+	private final UUID activityId;
+	private final String trackingId;
+	private final String address;
 
 	private TrackingContext(UUID activityId, String trackingId, String address) {
 		this.activityId = activityId;
